@@ -2,6 +2,21 @@
 
 A small ASP.NET Core (.NET 10) minimal API for placing coffee orders. It prices the order, applies a 10% student discount, and simulates printing a receipt, saving the order to a database, and emailing the customer (all three are written to the console).
 
+## Project structure
+
+Each class has a single reason to change, and each folder has its own namespace:
+
+| Folder | Namespace | Contents |
+| --- | --- | --- |
+| `Domain/` | `BeeCafe.Domain` | `MenuItem`, `Menu`, `Order`: the core model, with no I/O |
+| `Pricing/` | `BeeCafe.Pricing` | `PriceCalculator`: prices and discounts |
+| `Receipts/` | `BeeCafe.Receipts` | `ReceiptPrinter`: what a receipt shows |
+| `Persistence/` | `BeeCafe.Persistence` | `OrderRepository`: how orders are stored (simulated) |
+| `Notifications/` | `BeeCafe.Notifications` | `EmailNotifier`: how customers are contacted (simulated) |
+| `Api/` | `BeeCafe.Api` | `OrderEndpoints` and request/response contracts |
+
+`Program.cs` configures OpenAPI and Swagger UI, and maps the endpoints.
+
 ## Prerequisites
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
@@ -80,11 +95,12 @@ curl -X POST http://localhost:5230/orders \
 ```json
 {
   "items": ["latte", "flat white"],
-  "total": 9.450
+  "total": 9.450,
+  "gst": 1.23
 }
 ```
 
-The total is ($5.50 + $5.00) × 0.9 for the student discount.
+The total is ($5.50 + $5.00) × 0.9 for the student discount. Prices include NZ GST at 15%, so `gst` is the GST share of the total (total × 3/23, rounded to 2 decimal places).
 
 **Unknown item**
 
