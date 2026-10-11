@@ -1,0 +1,25 @@
+@BeeCafe_HostAddress = http://localhost:5230
+
+POST {{BeeCafe_HostAddress}}/orders
+Content-Type: application/json
+Accept: application/json
+
+{
+  "customerEmail": "jane@example.com",
+  "isStudent": true,
+  "items": ["latte", "flat white"]
+}
+
+###
+
+POST {{BeeCafe_HostAddress}}/orders
+Content-Type: application/json
+Accept: application/json
+
+{
+  "customerEmail": "jane@example.com",
+  "isStudent": false,
+  "items": ["mocha"]
+}
+
+###

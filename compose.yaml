@@ -1,0 +1,7 @@
+﻿services:
+  beecafe:
+    image: beecafe
+    build:
+      context: .
+      dockerfile: Dockerfile
+
