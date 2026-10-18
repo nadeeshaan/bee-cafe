@@ -1,17 +1,17 @@
 using BeeCafe.Domain;
+using BeeCafe.Pricing.Discounts;
 
 namespace BeeCafe.Pricing;
 
 // Changes when the owner changes prices or discounts
-public class PriceCalculator
+public class PriceCalculator(IEnumerable<IDiscountRule> discountRules)
 {
     public decimal Total(Order order)
     {
         var subtotal = order.Items.Sum(i => i.Price);
-
-        if (order.IsStudent)
-        {
-            subtotal *= 0.9m;
+        
+        foreach (var rule in discountRules) {
+            subtotal = rule.Apply(order, subtotal);
         }
 
         return subtotal;

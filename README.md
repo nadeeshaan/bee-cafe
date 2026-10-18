@@ -1,6 +1,6 @@
 # Bee Cafe
 
-A small ASP.NET Core (.NET 10) minimal API for placing coffee orders. It prices the order, applies a 10% student discount, and simulates printing a receipt, saving the order to a database, and emailing the customer (all three are written to the console).
+A small ASP.NET Core (.NET 10) minimal API for placing coffee orders. It prices the order, applies student, happy-hour, early-bird and loyalty discounts, and simulates printing a receipt, saving the order to a database, and emailing the customer (all three are written to the console).
 
 ## Project structure
 
@@ -9,7 +9,8 @@ Each class has a single reason to change, and each folder has its own namespace:
 | Folder | Namespace | Contents |
 | --- | --- | --- |
 | `Domain/` | `BeeCafe.Domain` | `MenuItem`, `Menu`, `Order`: the core model, with no I/O |
-| `Pricing/` | `BeeCafe.Pricing` | `PriceCalculator`: prices and discounts |
+| `Pricing/` | `BeeCafe.Pricing` | `PriceCalculator`: subtotal, applies discount rules, GST |
+| `Pricing/Discounts/` | `BeeCafe.Pricing.Discounts` | `IDiscountRule` and its rules: `StudentDiscount`, `HappyHourDiscount`, `EarlyBirdDiscount`, `LoyaltyDiscount` |
 | `Receipts/` | `BeeCafe.Receipts` | `ReceiptPrinter`: what a receipt shows |
 | `Persistence/` | `BeeCafe.Persistence` | `OrderRepository`: how orders are stored (simulated) |
 | `Notifications/` | `BeeCafe.Notifications` | `EmailNotifier`: how customers are contacted (simulated) |
@@ -65,8 +66,20 @@ Places an order and returns the items with the total price.
 | Field | Type | Description |
 | --- | --- | --- |
 | `customerEmail` | string | Required. Must not be blank. |
-| `isStudent` | boolean | If `true`, a 10% discount is applied. |
+| `isStudent` | boolean | If `true`, the student discount applies. |
 | `items` | string[] | Required. At least one item. |
+| `loyaltyStamps` | integer | Optional, defaults to `0`. With 9 or more, the cheapest item is free. |
+
+**Discounts**
+
+Discounts apply in this order, each to the result of the previous one:
+
+| Rule | Condition | Effect |
+| --- | --- | --- |
+| `StudentDiscount` | `isStudent` is `true` | 10% off |
+| `HappyHourDiscount` | Server local time is from 14:00 up to (not including) 16:00 | 20% off |
+| `EarlyBirdDiscount` | Server local time is before 08:00 | $1.00 off (total never below $0) |
+| `LoyaltyDiscount` | `loyaltyStamps` is 9 or more | Cheapest item's price taken off (total never below $0) |
 
 **Menu**
 
@@ -100,7 +113,7 @@ curl -X POST http://localhost:5230/orders \
 }
 ```
 
-The total is ($5.50 + $5.00) × 0.9 for the student discount. Prices include NZ GST at 15%, so `gst` is the GST share of the total (total × 3/23, rounded to 2 decimal places).
+The total is ($5.50 + $5.00) × 0.9 for the student discount, outside happy hour. Prices include NZ GST at 15%, so `gst` is the GST share of the total (total × 3/23, rounded to 2 decimal places).
 
 **Unknown item**
 
