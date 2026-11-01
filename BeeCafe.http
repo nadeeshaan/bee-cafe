@@ -7,7 +7,8 @@ Accept: application/json
 {
   "customerEmail": "jane@example.com",
   "isStudent": true,
-  "items": ["latte", "flat white"]
+  "items": ["latte", "flat white"],
+  "paymentMethod": "card"
 }
 
 ###
@@ -19,7 +20,43 @@ Accept: application/json
 {
   "customerEmail": "jane@example.com",
   "isStudent": false,
-  "items": ["mocha"]
+  "items": ["mocha"],
+  "paymentMethod": "card"
+}
+
+###
+
+POST {{BeeCafe_HostAddress}}/orders
+Content-Type: application/json
+Accept: application/json
+
+{
+  "customerEmail": "jane@example.com",
+  "isStudent": false,
+  "items": ["latte"],
+  "paymentMethod": "giftCard"
+}
+
+###
+
+POST {{BeeCafe_HostAddress}}/orders/refund
+Content-Type: application/json
+Accept: application/json
+
+{
+  "paymentMethod": "card",
+  "amount": 5.50
+}
+
+###
+
+POST {{BeeCafe_HostAddress}}/orders/refund
+Content-Type: application/json
+Accept: application/json
+
+{
+  "paymentMethod": "giftCard",
+  "amount": 5.50
 }
 
 ###
