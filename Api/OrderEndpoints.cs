@@ -17,7 +17,7 @@ public static class OrderEndpoints
         return app;
     }
 
-    private static IResult PlaceOrder(PlaceOrderRequest request)
+    private static IResult PlaceOrder(PlaceOrderRequest request, InMemoryOrderStore orderStore)
     {
         if (string.IsNullOrWhiteSpace(request.CustomerEmail)) {
             return Results.BadRequest(new { error = "CustomerEmail is required." });
@@ -57,7 +57,9 @@ public static class OrderEndpoints
         new CheckoutService().Checkout(paymentMethod, total);
 
         new ReceiptPrinter().Print(order, total, gst);
-        new OrderRepository().Save(order, total);
+        // Order placement only writes, so it depends on IOrderWriter alone
+        IOrderWriter orderWriter = new OrderRepository(orderStore, TimeProvider.System);
+        orderWriter.Save(order, total);
         new EmailNotifier().Send(order.CustomerContact, "your order is ready!");
 
         return Results.Ok(new PlaceOrderResponse(request.Items, total, gst, paymentMethod.Name));

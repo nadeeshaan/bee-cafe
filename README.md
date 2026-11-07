@@ -1,6 +1,6 @@
 # Bee Cafe
 
-A small ASP.NET Core (.NET 10) minimal API for placing coffee orders. It prices the order, applies student, happy-hour, early-bird and loyalty discounts, takes payment by card or gift card, and simulates printing a receipt, saving the order to a database, and emailing the customer (payments and these three actions are written to the console). Card payments can also be refunded.
+A small ASP.NET Core (.NET 10) minimal API for placing coffee orders. It prices the order, applies student, happy-hour, early-bird and loyalty discounts, takes payment by card or gift card, keeps orders in memory, and simulates printing a receipt and emailing the customer (payments and these actions are written to the console). Saved orders are lost when the app restarts. Card payments can also be refunded.
 
 ## Project structure
 
@@ -13,11 +13,12 @@ Each class has a single reason to change, and each folder has its own namespace:
 | `Pricing/Discounts/` | `BeeCafe.Pricing.Discounts` | `IDiscountRule` and its rules: `StudentDiscount`, `HappyHourDiscount`, `EarlyBirdDiscount`, `LoyaltyDiscount` |
 | `Payments/` | `BeeCafe.Payments` | `IPaymentMethod`, `IRefundable`, `CardPaymentMode`, `GiftCard`, `PaymentMethods` (lookup by name), `CheckoutService` (takes payment), `RefundService` (gives refunds) |
 | `Receipts/` | `BeeCafe.Receipts` | `ReceiptPrinter`: what a receipt shows |
-| `Persistence/` | `BeeCafe.Persistence` | `OrderRepository`: how orders are stored (simulated) |
+| `Persistence/` | `BeeCafe.Persistence` | Small interfaces, one per kind of caller: `IOrderWriter`, `IOrderLookup`, `IOpenOrdersReader`, `IOrderCleanup`. `OrderRepository` implements all of them, plus `ISalesReport` and `ISalesOverviews`, working on top of `InMemoryOrderStore` |
+| `Reporting/` | `BeeCafe.Reporting` | `ISalesReport`: daily sales and CSV export. `ISalesOverviews`: most-ordered items |
 | `Notifications/` | `BeeCafe.Notifications` | `EmailNotifier`: how customers are contacted (simulated) |
-| `Api/` | `BeeCafe.Api` | `OrderEndpoints` and request/response contracts |
+| `Api/` | `BeeCafe.Api` | `OrderEndpoints`, `KitchenEndpoints` and their request/response contracts |
 
-`Program.cs` configures OpenAPI and Swagger UI, and maps the endpoints.
+`Program.cs` configures OpenAPI and Swagger UI, registers `InMemoryOrderStore` as a singleton, and maps the endpoints.
 
 ## Prerequisites
 
@@ -52,7 +53,7 @@ When the app runs in the `Development` environment (both launch profiles set thi
 
 The OpenAPI document comes from the built-in `Microsoft.AspNetCore.OpenApi` package, and `Swashbuckle.AspNetCore.SwaggerUI` displays it. Neither one is enabled outside `Development`.
 
-In Swagger UI, expand **POST /orders** or **POST /orders/refund**, click **Try it out**, edit the request body, and click **Execute**.
+In Swagger UI, expand an endpoint such as **POST /orders** or **GET /kitchen/orders**, click **Try it out**, edit the request body, and click **Execute**.
 
 You can also send the sample requests in [BeeCafe.http](BeeCafe.http) from Visual Studio, Rider, or VS Code (with the REST Client extension).
 
@@ -172,6 +173,25 @@ curl -X POST http://localhost:5230/orders/refund \
 | `paymentMethod` is `giftCard` | `{ "error": "Payment method giftCard does not support refunds." }` |
 | `paymentMethod` is unknown | `{ "error": "Unknown payment method: cash" }` |
 | `amount` is zero or less | `{ "error": "Amount must be greater than zero." }` |
+
+### `GET /kitchen/orders`
+
+Returns the orders that are still open, oldest first, for the kitchen to make. Orders are kept in memory, so the list is empty after the app restarts. Nothing closes orders yet, so every order placed since the last restart is listed.
+
+```bash
+curl http://localhost:5230/kitchen/orders
+```
+
+`200 OK`
+
+```json
+[
+  { "id": "bceaf2d3-88f5-44c5-a776-8e58aa41c77b", "items": ["latte", "flat white"] },
+  { "id": "c86e1428-9e77-4807-af89-3e7fec4e401a", "items": ["long black"] }
+]
+```
+
+The endpoint depends only on `IOpenOrdersReader`, and placing an order depends only on `IOrderWriter`. Both are implemented by the same `OrderRepository`, but neither caller can see the other's methods (Interface Segregation Principle).
 
 ### Payment methods and the Liskov Substitution Principle
 

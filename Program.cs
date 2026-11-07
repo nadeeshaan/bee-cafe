@@ -1,10 +1,14 @@
 using BeeCafe.Api;
+using BeeCafe.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+
+// Singleton so saved orders are shared by every request until the app restarts
+builder.Services.AddSingleton<InMemoryOrderStore>();
 
 var app = builder.Build();
 
@@ -18,5 +22,6 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 app.MapOrderEndpoints();
+app.MapKitchenEndpoints();
 
 app.Run();
