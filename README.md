@@ -1,6 +1,6 @@
 # Bee Cafe
 
-A small ASP.NET Core (.NET 10) minimal API for placing coffee orders. It prices the order, applies student, happy-hour, early-bird and loyalty discounts, and simulates printing a receipt, saving the order to a database, and emailing the customer (all three are written to the console).
+A small ASP.NET Core (.NET 10) minimal API for placing coffee orders. It prices the order, applies student, happy-hour, early-bird and loyalty discounts, takes payment by card or gift card, and simulates printing a receipt, saving the order to a database, and emailing the customer (payments and these three actions are written to the console). Card payments can also be refunded.
 
 ## Project structure
 
@@ -11,6 +11,7 @@ Each class has a single reason to change, and each folder has its own namespace:
 | `Domain/` | `BeeCafe.Domain` | `MenuItem`, `Menu`, `Order`: the core model, with no I/O |
 | `Pricing/` | `BeeCafe.Pricing` | `PriceCalculator`: subtotal, applies discount rules, GST |
 | `Pricing/Discounts/` | `BeeCafe.Pricing.Discounts` | `IDiscountRule` and its rules: `StudentDiscount`, `HappyHourDiscount`, `EarlyBirdDiscount`, `LoyaltyDiscount` |
+| `Payments/` | `BeeCafe.Payments` | `IPaymentMethod`, `IRefundable`, `CardPaymentMode`, `GiftCard`, `PaymentMethods` (lookup by name), `CheckoutService` (takes payment), `RefundService` (gives refunds) |
 | `Receipts/` | `BeeCafe.Receipts` | `ReceiptPrinter`: what a receipt shows |
 | `Persistence/` | `BeeCafe.Persistence` | `OrderRepository`: how orders are stored (simulated) |
 | `Notifications/` | `BeeCafe.Notifications` | `EmailNotifier`: how customers are contacted (simulated) |
@@ -51,7 +52,7 @@ When the app runs in the `Development` environment (both launch profiles set thi
 
 The OpenAPI document comes from the built-in `Microsoft.AspNetCore.OpenApi` package, and `Swashbuckle.AspNetCore.SwaggerUI` displays it. Neither one is enabled outside `Development`.
 
-In Swagger UI, expand **POST /orders**, click **Try it out**, edit the request body, and click **Execute**.
+In Swagger UI, expand **POST /orders** or **POST /orders/refund**, click **Try it out**, edit the request body, and click **Execute**.
 
 You can also send the sample requests in [BeeCafe.http](BeeCafe.http) from Visual Studio, Rider, or VS Code (with the REST Client extension).
 
@@ -68,6 +69,7 @@ Places an order and returns the items with the total price.
 | `customerEmail` | string | Required. Must not be blank. |
 | `isStudent` | boolean | If `true`, the student discount applies. |
 | `items` | string[] | Required. At least one item. |
+| `paymentMethod` | string | Required. `card` or `giftCard`. The total is charged to it. |
 | `loyaltyStamps` | integer | Optional, defaults to `0`. With 9 or more, the cheapest item is free. |
 
 **Discounts**
@@ -99,7 +101,8 @@ curl -X POST http://localhost:5230/orders \
   -d '{
         "customerEmail": "jane@example.com",
         "isStudent": true,
-        "items": ["latte", "flat white"]
+        "items": ["latte", "flat white"],
+        "paymentMethod": "card"
       }'
 ```
 
@@ -109,7 +112,8 @@ curl -X POST http://localhost:5230/orders \
 {
   "items": ["latte", "flat white"],
   "total": 9.450,
-  "gst": 1.23
+  "gst": 1.23,
+  "paymentMethod": "card"
 }
 ```
 
@@ -118,7 +122,7 @@ The total is ($5.50 + $5.00) × 0.9 for the student discount, outside happy hour
 **Unknown item**
 
 ```json
-{ "customerEmail": "jane@example.com", "isStudent": false, "items": ["mocha"] }
+{ "customerEmail": "jane@example.com", "isStudent": false, "items": ["mocha"], "paymentMethod": "card" }
 ```
 
 `400 Bad Request`
@@ -133,6 +137,50 @@ The total is ($5.50 + $5.00) × 0.9 for the student discount, outside happy hour
 | --- | --- |
 | `customerEmail` is missing or blank | `{ "error": "CustomerEmail is required." }` |
 | `items` is missing or empty | `{ "error": "At least one item is required." }` |
+| `paymentMethod` is missing or blank | `{ "error": "PaymentMethod is required." }` |
+| `paymentMethod` isn't `card` or `giftCard` | `{ "error": "Unknown payment method: cash" }` |
+
+### `POST /orders/refund`
+
+Refunds an amount to a payment method. Only card payments can be refunded.
+
+**Request body**
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `paymentMethod` | string | Required. `card` or `giftCard`. |
+| `amount` | number | Required. Must be greater than zero. |
+
+**Successful refund**
+
+```bash
+curl -X POST http://localhost:5230/orders/refund \
+  -H "Content-Type: application/json" \
+  -d '{ "paymentMethod": "card", "amount": 5.50 }'
+```
+
+`200 OK`
+
+```json
+{ "paymentMethod": "card", "amount": 5.50 }
+```
+
+**Errors** (`400 Bad Request`)
+
+| Cause | Response |
+| --- | --- |
+| `paymentMethod` is `giftCard` | `{ "error": "Payment method giftCard does not support refunds." }` |
+| `paymentMethod` is unknown | `{ "error": "Unknown payment method: cash" }` |
+| `amount` is zero or less | `{ "error": "Amount must be greater than zero." }` |
+
+### Payment methods and the Liskov Substitution Principle
+
+Paying and refunding are separate interfaces:
+
+- `IPaymentMethod` (`Pay`) is implemented by `CardPaymentMode` and `GiftCard`.
+- `IRefundable` (`Refund`) is implemented only by `CardPaymentMode`.
+
+Order placement accepts any `IPaymentMethod`, and either class can be used there without the caller knowing which one it has. Gift cards can't be refunded, so `GiftCard` doesn't implement `IRefundable`. That means it never needs a `Refund` method that throws `NotSupportedException`, which would break LSP. The refund endpoint works only with `IRefundable`, so asking to refund a gift card returns `400`.
 
 ## Docker
 

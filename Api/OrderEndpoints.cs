@@ -1,5 +1,6 @@
 using BeeCafe.Domain;
 using BeeCafe.Notifications;
+using BeeCafe.Payments;
 using BeeCafe.Persistence;
 using BeeCafe.Pricing;
 using BeeCafe.Pricing.Discounts;
@@ -12,6 +13,7 @@ public static class OrderEndpoints
     public static IEndpointRouteBuilder MapOrderEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/orders", PlaceOrder).WithName("PlaceOrder");
+        app.MapPost("/orders/refund", Refund).WithName("Refund");
         return app;
     }
 
@@ -23,6 +25,14 @@ public static class OrderEndpoints
 
         if (request.Items is null || request.Items.Count == 0) {
             return Results.BadRequest(new { error = "At least one item is required." });
+        }
+
+        if (string.IsNullOrWhiteSpace(request.PaymentMethod)) {
+            return Results.BadRequest(new { error = "PaymentMethod is required." });
+        }
+
+        if (!PaymentMethods.TryFind(request.PaymentMethod, out var paymentMethod)) {
+            return Results.BadRequest(new { error = $"Unknown payment method: {request.PaymentMethod}" });
         }
 
         var order = new Order(request.CustomerEmail, request.IsStudent, request.LoyaltyStamps);
@@ -44,10 +54,22 @@ public static class OrderEndpoints
         var total = calculator.Total(order);
         var gst = calculator.Gst(total);
 
+        new CheckoutService().Checkout(paymentMethod, total);
+
         new ReceiptPrinter().Print(order, total, gst);
         new OrderRepository().Save(order, total);
         new EmailNotifier().Send(order.CustomerContact, "your order is ready!");
 
-        return Results.Ok(new PlaceOrderResponse(request.Items, total, gst));
+        return Results.Ok(new PlaceOrderResponse(request.Items, total, gst, paymentMethod.Name));
+    }
+
+    private static IResult Refund(RefundRequest request)
+    {
+        var result = new RefundService().Refund(request.PaymentMethod, request.Amount);
+        if (!result.Succeeded) {
+            return Results.BadRequest(new { error = result.Error });
+        }
+
+        return Results.Ok(new RefundResponse(request.PaymentMethod, request.Amount));
     }
 }
